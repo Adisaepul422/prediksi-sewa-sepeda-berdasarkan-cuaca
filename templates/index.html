@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Prediksi Penyewaan Sepeda</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body { background: #f4f7f6; }
+    .hero { background: linear-gradient(135deg, #0f766e, #115e59); color: #fff; }
+    .hasil-angka { font-size: 3rem; font-weight: 700; color: #0f766e; line-height: 1.1; }
+    .kartu-metrik .nilai { font-size: 1.6rem; font-weight: 700; }
+    code.persamaan { font-size: 1.05rem; }
+  </style>
+</head>
+<body>
+
+<header class="hero py-4">
+  <div class="container">
+    <h1 class="h3 mb-1">Prediksi Jumlah Penyewaan Sepeda</h1>
+    <p class="mb-0 opacity-75">Model Regresi Linear Sederhana: seberapa banyak sepeda disewa per hari pada suhu tertentu?</p>
+  </div>
+</header>
+
+<main class="container my-4">
+
+  <div class="row g-4">
+    <!-- Form -->
+    <div class="col-lg-5">
+      <div class="card shadow-sm h-100">
+        <div class="card-body">
+          <h2 class="h5">Masukkan suhu udara</h2>
+          <form method="post" novalidate>
+            <label for="suhu" class="form-label">Suhu rata-rata harian (°C)</label>
+            <div class="input-group mb-2">
+              <input type="text" inputmode="decimal" class="form-control {% if error %}is-invalid{% endif %}"
+                     id="suhu" name="suhu" value="{{ nilai_input }}" placeholder="contoh: 28" autofocus>
+              <span class="input-group-text">°C</span>
+              {% if error %}<div class="invalid-feedback">{{ error }}</div>{% endif %}
+            </div>
+            <div class="form-text mb-3">
+              Rentang suhu pada data latih: {{ suhu_min|ribuan(1) }} sampai {{ suhu_max|ribuan(1) }} °C.
+            </div>
+            <button class="btn btn-success w-100" type="submit">Prediksi</button>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- Hasil -->
+    <div class="col-lg-7">
+      <div class="card shadow-sm h-100">
+        <div class="card-body">
+          <h2 class="h5">Hasil prediksi</h2>
+          {% if hasil %}
+            <p class="text-muted mb-1">Pada suhu {{ hasil.suhu|ribuan(1) }} °C, estimasi penyewaan:</p>
+            <div class="hasil-angka">{{ hasil.prediksi|ribuan }} <span class="fs-5 fw-normal text-muted">sepeda per hari</span></div>
+            <p class="mt-2 mb-2">Kisaran wajar sekitar <strong>{{ hasil.bawah|ribuan }}</strong> sampai <strong>{{ hasil.atas|ribuan }}</strong> sepeda (prediksi ± RMSE model).</p>
+            <p class="small text-muted mb-2">Suhu dikonversi ke skala dataset: {{ hasil.suhu|ribuan(1) }} ÷ {{ pembagi|int }} = {{ hasil.temp_dataset|ribuan(4) }}.</p>
+            {% if hasil.di_luar_rentang %}
+              <div class="alert alert-warning py-2 mb-2">Suhu ini di luar rentang data latih, jadi hasilnya kurang dapat diandalkan.</div>
+            {% endif %}
+            {% if hasil.dipotong_nol %}
+              <div class="alert alert-warning py-2 mb-0">Model menghasilkan nilai negatif, sehingga ditampilkan sebagai 0.</div>
+            {% endif %}
+          {% else %}
+            <p class="text-muted mb-0">Isi suhu pada form lalu tekan <em>Prediksi</em>. Hasilnya akan muncul di sini.</p>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Kualitas model -->
+  <h2 class="h5 mt-4">Seberapa andal model ini?</h2>
+  <div class="row g-3 kartu-metrik">
+    <div class="col-6 col-md-3"><div class="card shadow-sm"><div class="card-body">
+      <div class="text-muted small">Jumlah data</div><div class="nilai">{{ ringkasan.jumlah_data|ribuan }}</div><div class="small text-muted">hari (2011 sampai 2012)</div></div></div></div>
+    <div class="col-6 col-md-3"><div class="card shadow-sm"><div class="card-body">
+      <div class="text-muted small">Korelasi suhu dan penyewaan</div><div class="nilai">{{ ringkasan.korelasi_temp_cnt|ribuan(2) }}</div><div class="small text-muted">positif, sedang</div></div></div></div>
+    <div class="col-6 col-md-3"><div class="card shadow-sm"><div class="card-body">
+      <div class="text-muted small">R² (data uji)</div><div class="nilai">{{ ringkasan.R2_uji|ribuan(2) }}</div><div class="small text-muted">suhu menjelaskan {{ (ringkasan.R2_uji * 100)|ribuan(0) }}% variasi</div></div></div></div>
+    <div class="col-6 col-md-3"><div class="card shadow-sm"><div class="card-body">
+      <div class="text-muted small">RMSE (data uji)</div><div class="nilai">{{ ringkasan.RMSE_uji|ribuan }}</div><div class="small text-muted">sepeda per hari</div></div></div></div>
+  </div>
+
+  <!-- Cara kerja -->
+  <div class="card shadow-sm mt-4">
+    <div class="card-body">
+      <h2 class="h5">Cara membaca model</h2>
+      <p class="mb-2"><code class="persamaan">cnt = {{ ringkasan.beta0|ribuan(2) }} + {{ ringkasan.beta1|ribuan(2) }} × temp</code>, dengan <code>temp = suhu °C ÷ {{ pembagi|int }}</code>.</p>
+      <ul class="mb-0">
+        <li>Setiap kenaikan 1 °C, penyewaan diprediksi naik sekitar <strong>{{ (ringkasan.beta1 / pembagi)|ribuan(0) }}</strong> sepeda per hari.</li>
+        <li>Intersep ({{ ringkasan.beta0|ribuan(0) }}) adalah titik awal garis pada temp = 0 (sekitar 0 °C), bukan prediksi yang bermakna untuk hari biasa.</li>
+        <li>Model hanya memakai suhu. Musim, cuaca, dan hari kerja juga berpengaruh, jadi hasilnya perkiraan kasar.</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Gambar -->
+  <div class="row g-4 mt-1">
+    <div class="col-lg-6"><div class="card shadow-sm"><div class="card-body">
+      <h3 class="h6">Hubungan suhu dan penyewaan</h3>
+      <img class="img-fluid" src="{{ url_for('static', filename='img/01_scatterplot_temp_cnt.png') }}" alt="Scatterplot suhu terhadap jumlah penyewaan sepeda dengan garis regresi">
+      <p class="small text-muted mb-0 mt-2">Tren naik, tetapi mulai mendatar pada suhu tinggi.</p>
+    </div></div></div>
+    <div class="col-lg-6"><div class="card shadow-sm"><div class="card-body">
+      <h3 class="h6">Hasil model pada data uji</h3>
+      <img class="img-fluid" src="{{ url_for('static', filename='img/03_hasil_model.png') }}" alt="Garis regresi dan perbandingan nilai aktual dengan prediksi">
+      <p class="small text-muted mb-0 mt-2">Titik yang jauh dari garis merah menunjukkan prediksi yang meleset.</p>
+    </div></div></div>
+  </div>
+
+</main>
+
+<footer class="container pb-4 small text-muted">
+  Data: Bike Sharing Dataset (Capital Bikeshare, Washington D.C., 2011 sampai 2012), Fanaee-T &amp; Gama (2013),
+  <em>Progress in Artificial Intelligence</em>, doi:10.1007/s13748-013-0040-3.
+  Tugas Akhir Praktikum Pembelajaran Mesin.
+</footer>
+
+</body>
+</html>
